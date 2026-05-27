@@ -50,16 +50,26 @@ GitHub Pages rebuilds within ~60 s. Cert and custom domain stay intact as long a
 6. Commit and push
 
 ## Brand tokens (Tailwind + CSS)
-| Token       | Hex       | Use                        |
-|-------------|-----------|----------------------------|
-| `accent`    | `#8D0AF5` | Primary CTA, active states |
-| `pink`      | `#FD89FF` | Secondary accent           |
-| `ink`       | `#131022` | Body text, headings        |
-| `paper`     | `#fafafd` | Page background            |
-| `mute`      | `#6e6a85` | Secondary text             |
-| `deep`      | `#3E0CB7` | Deep purple accent         |
+All colours verified against pupsic.ch computed styles (May 2025).
 
-Font: Montserrat (all weights). Number formatting: Swiss apostrophe (`1'234.56`).
+| Token       | Hex       | Use                        | Verified |
+|-------------|-----------|----------------------------|----------|
+| `accent`    | `#8D0AF5` | Primary CTA, active states | ✓ |
+| `pink`      | `#FD89FF` | Secondary accent           | ✓ |
+| `ink`       | `#131022` | Dark sections, buttons     | ✓ |
+| `paper`     | `#fafafd` | Page background            | ✓ |
+| `mute`      | `#87848f` | Secondary text             | ✓ (neutral, matches site's color-mix(#111013 50% white)) |
+| `deep`      | `#3E0CB7` | Deep purple accent         | ✓ |
+
+**Typography (verified against pupsic.ch):**
+- Font: **Montserrat**, weights **300, 400, 500, 600, 700, 800**
+- Weight 300 is required — used for large display headings (H1/H2 on pupsic.ch)
+- `.display` class: `font-weight: 300`, `letter-spacing: -0.04em` (tight, as on site)
+- Tailwind `font-bold` / `font-semibold` overrides `.display` where needed (logo, KPI numbers, buttons)
+- Body/paragraph/nav: weight **500**
+- UI labels/badges: weight **500**, `letter-spacing: 0.04em` (`.mono` class)
+
+Number formatting: Swiss apostrophe (`1'234.56`).
 
 ## Architecture notes
 - Script load order in `index.html` is the dependency graph — don't reorder

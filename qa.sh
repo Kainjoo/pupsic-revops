@@ -98,6 +98,34 @@ for cdn in "tailwindcss" "react@18" "recharts" "babel/standalone"; do
   fi
 done
 
+# Montserrat weight 300 must be loaded (display headings match pupsic.ch)
+if grep -q "Montserrat:wght@.*300" "$INDEX"; then
+  ok "Montserrat weight 300 loaded"
+else
+  err "Montserrat weight 300 missing from Google Fonts URL — display headings will use fallback weight"
+fi
+
+# mute colour should be the brand-aligned neutral (#87848f), not the old purple-cast #6e6a85
+if grep -q "87848f\|87848F" "$INDEX"; then
+  ok "mute colour #87848f (brand-aligned neutral)"
+elif grep -q "6e6a85\|6E6A85" "$INDEX"; then
+  err "mute colour is #6e6a85 (too purple vs pupsic.ch) — update to #87848f"
+else
+  warn "mute colour not found in index.html — check Tailwind config"
+fi
+
+# display class should use weight 300 and tight letter-spacing
+if grep -q "font-weight: 300" "$INDEX"; then
+  ok ".display uses font-weight 300 (matches pupsic.ch H1/H2)"
+else
+  err ".display font-weight is not 300 — large headings won't match brand"
+fi
+if grep -q "letter-spacing: -0.04em" "$INDEX"; then
+  ok ".display letter-spacing -0.04em (matches pupsic.ch tight headings)"
+else
+  err ".display letter-spacing is not -0.04em — headings won't match brand tracking"
+fi
+
 # ── 4. JSX sanity checks ─────────────────────────
 section "JSX sanity"
 
