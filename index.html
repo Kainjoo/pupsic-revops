@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pupsic — RevOps & MMM</title>
+  <title>Pupsic — RevOps Calculator</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -53,12 +53,37 @@
     .mono { font-family: 'Montserrat', ui-sans-serif, system-ui, sans-serif; font-weight: 500; letter-spacing: 0.04em; }
     .hair { border-color: rgba(19,16,34,0.10); }
 
+    /* ── Strict type scale: 3 sizes per screen + mono caption ───────
+       Rule: never use more than 3 of these on a single screen.
+       t-hero     — primary outcome (one per screen, 32px)
+       t-num      — KPI values, secondary outcomes (18px)
+       t-body     — body, labels, captions (12.5px)
+       t-caption  — mono uppercase eyebrows (10.5px) — visually distinct family
+       Weight rule: medium (500) max for numbers. NEVER bold (700).
+    */
+    .t-hero    { font-size: 32px; line-height: 1.05; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .t-num     { font-size: 18px; line-height: 1.05; font-weight: 500; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+    .t-body    { font-size: 12.5px; line-height: 1.5; font-weight: 400; }
+    .t-bodyhi  { font-size: 12.5px; line-height: 1.5; font-weight: 500; }
+    .t-caption { font-size: 10.5px; line-height: 1; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+
     /* Number transition: when a key changes, do a subtle fade-slide */
     @keyframes numpop {
       0% { opacity: 0.0; transform: translateY(2px); }
       100% { opacity: 1; transform: translateY(0); }
     }
     .num-anim { animation: numpop 220ms ease-out; }
+
+    /* Allocation bar — entrance grow + transition on change */
+    @keyframes barGrow {
+      0%   { transform: scaleX(0); }
+      100% { transform: scaleX(1); }
+    }
+    .bar-grow {
+      transform-origin: left center;
+      animation: barGrow 720ms cubic-bezier(.2,.7,.2,1) both;
+      transition: width 480ms cubic-bezier(.2,.7,.2,1);
+    }
 
     /* Slider — minimal Swiss */
     input[type=range] {
@@ -134,13 +159,23 @@
   <script type="text/babel" src="src/lib.jsx"></script>
   <script type="text/babel" src="src/icons.jsx"></script>
   <script type="text/babel" src="src/mmm-math.jsx"></script>
+  <script type="text/babel" src="src/revops-model.jsx"></script>
   <script type="text/babel" src="src/shell.jsx"></script>
+  <script type="text/babel" src="src/expert-shell.jsx"></script>
   <script type="text/babel" src="src/auth.jsx"></script>
   <script type="text/babel" src="src/pricing.jsx"></script>
   <script type="text/babel" src="src/dashboard.jsx"></script>
   <script type="text/babel" src="src/calculator.jsx"></script>
   <script type="text/babel" src="src/mmm.jsx"></script>
   <script type="text/babel" src="src/media-plan.jsx"></script>
+  <script type="text/babel" src="src/simulator.jsx"></script>
+  <script type="text/babel" src="src/rfm.jsx"></script>
+  <script type="text/babel" src="src/trials.jsx"></script>
+  <script type="text/babel" src="src/integrations.jsx"></script>
+  <script type="text/babel" src="src/cockpit.jsx"></script>
+  <script type="text/babel" src="src/waitlist.jsx"></script>
+  <script type="text/babel" src="src/plan-charts.jsx"></script>
+  <script type="text/babel" src="src/brand-planner.jsx"></script>
   <script type="text/babel" src="src/account.jsx"></script>
   <script type="text/babel" src="src/onboarding.jsx"></script>
   <script type="text/babel" src="src/app.jsx"></script>

@@ -1,14 +1,13 @@
-// Marketing Mix Model screen
+// Marketing Mix Model — flat editorial layout (Dashboard pattern)
 const RC = window.Recharts;
 
-function ChannelRow({ channel, spend, util, marginal, onSpend, animating }) {
+function ChannelRow({ channel, spend, util, marginal, onSpend, animating, index }) {
   const c = channel;
-  // Status flags
   const isSaturated = util > 0.80;
   const isUnder = util < 0.30 && spend > 0;
   const tone = isSaturated ? 'bad' : isUnder ? 'ok' : 'neutral';
 
-  // Tiny curve preview — 64 points
+  // Tiny curve preview
   const points = useMemo(() => {
     const pts = [];
     const maxS = c.sat * 4;
@@ -18,36 +17,35 @@ function ChannelRow({ channel, spend, util, marginal, onSpend, animating }) {
     }
     return pts;
   }, [c.id]);
-  const youHere = { s: spend, r: channelRevenue(c, spend) };
 
   return (
-    <div className={cn('px-5 py-4 grid grid-cols-[1fr_88px] gap-4 items-center transition-colors',
+    <div className={cn('py-4 grid grid-cols-[20px_10px_1fr_88px] items-center gap-4 transition-colors',
                         animating && 'bg-accentSoft/40')}>
-      <div>
+      <span className="t-caption text-mute tabular-nums self-start mt-1">{String(index + 1).padStart(2, '0')}</span>
+      <span className="w-1.5 h-1.5 shrink-0 self-start mt-2" style={{ background: c.hue }} />
+      <div className="min-w-0">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: c.hue }} />
-            <span className="text-[13px] font-medium tracking-tight truncate">{c.name}</span>
-            {isSaturated && <Badge tone="bad" className="mono">SATURÉ</Badge>}
-            {isUnder && <Badge tone="ok" className="mono">SOUS-INVESTI</Badge>}
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="t-body text-ink truncate">{c.name}</span>
+            {isSaturated && <span className="t-caption text-bad">Saturé</span>}
+            {isUnder && <span className="t-caption text-ok">Sous-investi</span>}
           </div>
-          <div className="text-right">
-            <div className="display text-[15px] font-semibold tracking-tight num"><AnimNum value={spend} format={fmtCHF} /></div>
+          <div className="t-num text-ink num tabular-nums shrink-0">
+            <AnimNum value={spend} format={fmtCHF} />
           </div>
         </div>
         <input type="range" min={0} max={Math.round(c.sat * 3.5)} step={100}
                value={spend}
                onChange={(e) => onSpend(Number(e.target.value))}
-               className={animating ? 'accent' : ''}
                style={{ accentColor: c.hue }} />
-        <div className="flex items-center justify-between text-[11px] text-mute mono">
-          <span>ROAS marginal&nbsp;<span className="text-ink">{marginal.toFixed(2).replace('.', ',')}×</span></span>
-          <span>Utilisation ceiling&nbsp;<span className={cn(tone === 'bad' && 'text-bad', tone === 'ok' && 'text-ok', tone === 'neutral' && 'text-ink')}>{fmtPct(util, 0)}</span></span>
+        <div className="flex items-center justify-between t-caption text-mute mt-0.5">
+          <span>ROAS marginal&nbsp;<span className="text-ink tabular-nums">{marginal.toFixed(2).replace('.', ',')}×</span></span>
+          <span>Utilisation&nbsp;<span className={cn('tabular-nums', tone === 'bad' && 'text-bad', tone === 'ok' && 'text-ok', tone === 'neutral' && 'text-ink')}>{fmtPct(util, 0)}</span></span>
         </div>
       </div>
 
       {/* Sparkline */}
-      <div className="w-full h-14 -mt-1">
+      <div className="w-full h-14 -mt-1 self-center">
         <svg viewBox="0 0 100 56" preserveAspectRatio="none" className="w-full h-full">
           <defs>
             <linearGradient id={`g-${c.id}`} x1="0" x2="0" y1="0" y2="1">
@@ -65,9 +63,9 @@ function ChannelRow({ channel, spend, util, marginal, onSpend, animating }) {
             return (
               <>
                 <path d={area} fill={`url(#g-${c.id})`} />
-                <path d={path} stroke={c.hue} strokeWidth="1.4" fill="none" />
+                <path d={path} stroke={c.hue} strokeWidth="1.2" fill="none" />
                 <line x1={hx} x2={hx} y1="2" y2="54" stroke={c.hue} strokeOpacity="0.35" strokeDasharray="2 2" strokeWidth="1" />
-                <circle cx={hx} cy={hy} r="3" fill={c.hue} stroke="#fafaf7" strokeWidth="1.5" />
+                <circle cx={hx} cy={hy} r="2.5" fill={c.hue} stroke="#fafafd" strokeWidth="1.2" />
               </>
             );
           })()}
@@ -83,7 +81,7 @@ function MMMScreen({ user, plan, mmmSpend, setMMMSpend, mediaPlan, setMediaPlan,
   if (!planAllows(plan, 'growth')) {
     return (
       <PageShell user={user} plan={plan} currentScreen="app/mmm" go={go} logout={() => go('login')}>
-        <div className="max-w-[1360px] mx-auto px-6 lg:px-10 py-10">
+        <div className="max-w-[1200px] mx-auto px-8 lg:px-12 py-10 lg:py-14">
           <GatedPanel need="growth" plan={plan} onUpgrade={() => go('pricing')}
             title="Marketing Mix Model"
             copy="Modélisez vos 8 canaux marketing et optimisez l'allocation de votre budget en continu." />
@@ -101,14 +99,6 @@ function MMMScreen({ user, plan, mmmSpend, setMMMSpend, mediaPlan, setMediaPlan,
   const mmm = useMemo(() => computeMMM(mmmSpend), [mmmSpend]);
   const suggestion = useMemo(() => suggestRealloc(mmmSpend), [mmmSpend]);
 
-  // Stacked bar — single column with each channel stacked
-  const stackedData = useMemo(() => [{
-    name: 'Top-line',
-    ...Object.fromEntries(mmm.perChannel.map(c => [c.id, c.revenue])),
-    base: mmm.baseUplift,
-  }], [mmm]);
-
-  // Optimize: run reallocStep 10× (or until equilibrium), animate sliders.
   const optimize = () => {
     if (optimizing) return;
     setOptimizing(true);
@@ -144,172 +134,291 @@ function MMMScreen({ user, plan, mmmSpend, setMMMSpend, mediaPlan, setMediaPlan,
 
   return (
     <PageShell user={user} plan={plan} currentScreen="app/mmm" go={go} logout={() => go('login')}>
-      <div className="max-w-[1360px] mx-auto px-6 lg:px-10 py-8 lg:py-10">
+      <div className="max-w-[1200px] mx-auto px-8 lg:px-12 py-10 lg:py-14">
 
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-7">
+        {/* ── Header ───────────────────────────────────────────────────── */}
+        <div className="flex items-end justify-between gap-6 flex-wrap pb-10 mb-10 border-b hair">
           <div>
-            <Badge tone="line" className="mono mb-3">MARKETING MIX MODEL · GROWTH+</Badge>
-            <h1 className="display text-[36px] lg:text-[44px] font-bold tracking-[-0.025em] leading-[1.02]">
-              Allouez votre budget comme un MMM.
+            <div className="t-caption text-mute">MMM · Marketing Mix Model</div>
+            <h1 className="t-hero text-ink mt-3 max-w-[820px]">
+              Allouez votre budget <span className="text-accent">comme un MMM</span>.
             </h1>
-            <p className="text-[14px] text-mute mt-2 max-w-[640px]">
-              Réponse par canal modélisée en courbe de saturation. ROAS marginal calculé en continu — ajustez les curseurs ou laissez Pupsic optimiser.
+            <p className="t-body text-mute mt-3 max-w-[560px]">
+              Réponse par canal modélisée en courbe de saturation. ROAS marginal calculé en continu —
+              ajustez les curseurs ou laissez Pupsic optimiser.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" size="md" icon={<IconUpload size={13}/>} onClick={importToMediaPlan}>
+            <Button variant="ghost" size="sm" icon={<IconUpload size={13}/>} onClick={importToMediaPlan}>
               Pousser vers media plan
             </Button>
-            <Button variant="primary" size="md"
+            <Button variant="primary" size="sm"
                     onClick={optimize}
                     disabled={optimizing}
-                    icon={optimizing ? <Spinner size={14}/> : <IconWand size={14}/>}>
-              {optimizing ? 'Optimisation…' : 'Optimiser automatiquement'}
+                    icon={optimizing ? <Spinner size={13}/> : <IconWand size={13}/>}>
+              {optimizing ? 'Optimisation…' : 'Optimiser'}
             </Button>
           </div>
         </div>
 
-        {/* Layout: channels (left) + outputs (right) */}
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-3">
-
-          {/* Channels panel */}
-          <Card padded={false}>
-            <div className="px-5 py-4 border-b hair flex items-center justify-between">
-              <div className="display text-[15px] font-semibold tracking-tight">Canaux · dépense mensuelle</div>
-              <div className="text-[11px] text-mute mono uppercase">{CHANNELS.length} actifs</div>
+        {/* ── Outcome strip ────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_2fr] gap-12 pb-12 mb-12 border-b hair items-start">
+          <div>
+            <div className="t-caption text-mute">Top-line mensuel projeté</div>
+            <div className="t-hero text-accent mt-3 whitespace-nowrap">
+              <AnimNum value={mmm.totalRevenue} format={fmtCHF} />
             </div>
-            <div className="divide-y hair">
-              {mmm.perChannel.map(c => (
-                <ChannelRow key={c.id}
-                            channel={c}
-                            spend={c.spend}
-                            util={c.util}
-                            marginal={c.marginal}
-                            animating={animSet.has(c.id)}
-                            onSpend={(v) => setSpend(c.id, v)} />
-              ))}
-              <div className="px-5 py-4 bg-paper2 flex items-center justify-between">
-                <span className="display text-[14px] font-semibold tracking-tight">Total dépense / mois</span>
-                <span className="display text-[20px] font-semibold tracking-tight num">
-                  <AnimNum value={mmm.totalSpend} format={fmtCHF} />
+            <div className="t-body text-mute mt-3 max-w-[400px]">
+              Dont {fmtCHF(mmm.baseUplift)} base/organique
+              {snapshot && (
+                <span className={cn('block mt-1 tabular-nums', mmm.totalRevenue > snapshot.totalRevenue ? 'text-ok' : 'text-mute')}>
+                  {mmm.totalRevenue > snapshot.totalRevenue ? '+' : ''}{fmtCHF(mmm.totalRevenue - snapshot.totalRevenue)} vs avant optimisation
                 </span>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-x-8 gap-y-6">
+            <div className="border-b hair pb-3">
+              <div className="t-caption text-mute">Dépense / mois</div>
+              <div className="t-num text-ink mt-2"><AnimNum value={mmm.totalSpend} format={fmtCHF} /></div>
+              <div className="t-body text-mute mt-1.5">{CHANNELS.length} canaux actifs</div>
+            </div>
+            <div className="border-b hair pb-3">
+              <div className="t-caption text-mute">ROAS pondéré</div>
+              <div className="t-num text-ink mt-2"><AnimNum value={mmm.roas} format={(v) => v.toFixed(2).replace('.', ',') + '×'} /></div>
+              <div className="t-body text-mute mt-1.5">
+                {snapshot && (mmm.roas > snapshot.roas ? '+' : '')}{snapshot ? (mmm.roas - snapshot.roas).toFixed(2).replace('.', ',') + '× vs avant' : 'sur dépense totale'}
               </div>
             </div>
-          </Card>
-
-          {/* Outputs panel */}
-          <div className="space-y-3">
-            {/* Headline numbers */}
-            <Card>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <div className="text-[11px] text-mute mono uppercase tracking-[0.04em]">Top-line mensuel projeté</div>
-                  <div className="display text-[40px] font-semibold tracking-[-0.025em] leading-none mt-3 num">
-                    <AnimNum value={mmm.totalRevenue} format={fmtCHF} />
-                  </div>
-                  <div className="text-[11.5px] text-mute mt-1.5">
-                    Dont {fmtCHF(mmm.baseUplift)} base/organique
-                    {snapshot && (
-                      <span className={cn('ml-2 mono', mmm.totalRevenue > snapshot.totalRevenue ? 'text-ok' : 'text-mute')}>
-                        {mmm.totalRevenue > snapshot.totalRevenue ? '+' : ''}{fmtCHF(mmm.totalRevenue - snapshot.totalRevenue)} vs avant
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="border-l hair pl-6">
-                  <div className="text-[11px] text-mute mono uppercase tracking-[0.04em]">ROAS pondéré</div>
-                  <div className="display text-[40px] font-semibold tracking-[-0.025em] leading-none mt-3 num">
-                    <AnimNum value={mmm.roas} format={(v) => v.toFixed(2).replace('.', ',') + '×'} />
-                  </div>
-                  <div className="text-[11.5px] text-mute mt-1.5">
-                    Sur {fmtCHF(mmm.totalSpend)} dépensés
-                    {snapshot && (
-                      <span className={cn('ml-2 mono', mmm.roas > snapshot.roas ? 'text-ok' : 'text-mute')}>
-                        {mmm.roas > snapshot.roas ? '+' : ''}{(mmm.roas - snapshot.roas).toFixed(2).replace('.', ',')}× vs avant
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Stacked bar */}
-            <Card padded={false}>
-              <div className="px-5 py-4 border-b hair flex items-center justify-between">
-                <div className="display text-[15px] font-semibold tracking-tight">Contribution au top-line</div>
-                <div className="text-[11px] text-mute mono uppercase">CHF / MOIS</div>
-              </div>
-              <div className="p-5">
-                <MeasuredWidth className="h-[180px]">
-                  {(w) => (
-                    <RC.BarChart width={w} height={180} data={stackedData} layout="vertical" barCategoryGap={0} margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
-                      <RC.XAxis type="number" hide />
-                      <RC.YAxis type="category" dataKey="name" hide />
-                      <RC.Tooltip
-                        cursor={{ fill: 'rgba(10,10,10,0.04)' }}
-                        contentStyle={{ background:'#fafaf7', border:'1px solid rgba(10,10,10,0.10)', borderRadius:0, fontSize:12, fontFamily:'JetBrains Mono' }}
-                        formatter={(v, key) => {
-                          const c = CHANNEL_BY_ID[key]; const name = c?.name || (key === 'base' ? 'Base / organique' : key);
-                          return [fmtCHF(v), name];
-                        }} />
-                      {CHANNELS.map(c => (
-                        <RC.Bar key={c.id} dataKey={c.id} stackId="a" fill={c.hue} isAnimationActive={false} />
-                      ))}
-                      <RC.Bar dataKey="base" stackId="a" fill="#bfbacf" isAnimationActive={false} />
-                    </RC.BarChart>
-                  )}
-                </MeasuredWidth>
-                {/* Legend */}
-                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11.5px]">
-                  {mmm.perChannel.slice().sort((a, b) => b.revenue - a.revenue).map(c => (
-                    <div key={c.id} className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-2 min-w-0">
-                        <span className="w-2 h-2 rounded-full flex-none" style={{background:c.hue}} />
-                        <span className="truncate tracking-tight">{c.name}</span>
-                      </span>
-                      <span className="text-mute mono num">{fmtCHF(c.revenue)}</span>
-                    </div>
-                  ))}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{background:'#bfbacf'}} /><span className="tracking-tight">Base / organique</span></span>
-                    <span className="text-mute mono num">{fmtCHF(mmm.baseUplift)}</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* AI rec */}
-            <Card className={cn('relative', suggestion && 'bg-[#f7eeff]')}>
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 border hair inline-flex items-center justify-center bg-paper"><IconSpark size={16} /></div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] text-accent mono uppercase tracking-[0.06em]">Recommandation Pupsic</div>
-                  {suggestion ? (
-                    <p className="display text-[18px] font-semibold tracking-tight mt-1.5 leading-snug">
-                      Réallouer <span className="num">{fmtCHF(suggestion.amount)}</span> de{' '}
-                      <span className="underline underline-offset-2 decoration-line">{CHANNEL_BY_ID[suggestion.fromId].name}</span> vers{' '}
-                      <span className="underline underline-offset-2 decoration-accent">{CHANNEL_BY_ID[suggestion.toId].name}</span>{' '}
-                      pour <span className="text-accent num">+{fmtCHF(suggestion.gain)}</span> de top-line à budget constant.
-                    </p>
-                  ) : (
-                    <p className="display text-[16px] font-semibold tracking-tight mt-1.5">
-                      Allocation équilibrée — ROAS marginaux alignés sur tous les canaux.
-                    </p>
-                  )}
-                </div>
-                {suggestion && (
-                  <Button variant="ghost" size="sm" icon={<IconWand size={13}/>} onClick={optimize}>
-                    Appliquer
-                  </Button>
-                )}
-              </div>
-            </Card>
+            <div className="border-b hair pb-3">
+              <div className="t-caption text-mute">Canaux saturés</div>
+              <div className="t-num text-ink mt-2">{mmm.perChannel.filter(c => c.util > 0.80).length}</div>
+              <div className="t-body text-mute mt-1.5">{mmm.perChannel.filter(c => c.util < 0.30 && c.spend > 0).length} sous-investis</div>
+            </div>
           </div>
         </div>
+
+        {/* ── AI recommendation ────────────────────────────────────────── */}
+        <div className="pb-12 mb-12 border-b hair flex items-start gap-4">
+          <div className="w-8 h-8 inline-flex items-center justify-center border hair bg-paper shrink-0 mt-0.5">
+            <IconSpark size={13} className="text-accent" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="t-caption text-accent">Recommandation Pupsic</div>
+            {suggestion ? (
+              <>
+                <p className="t-bodyhi mt-1.5 max-w-[760px] text-ink">
+                  Réallouer <span className="num">{fmtCHF(suggestion.amount)}</span> de{' '}
+                  <span className="underline underline-offset-2 decoration-line">{CHANNEL_BY_ID[suggestion.fromId].name}</span> vers{' '}
+                  <span className="underline underline-offset-2 decoration-accent">{CHANNEL_BY_ID[suggestion.toId].name}</span>{' '}
+                  pour <span className="text-accent num">+{fmtCHF(suggestion.gain)}</span> de top-line à budget constant.
+                </p>
+                <div className="mt-3.5">
+                  <Button variant="primary" size="sm" icon={<IconWand size={13}/>} onClick={optimize}>
+                    Appliquer
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="t-bodyhi mt-1.5 text-ink">
+                Allocation équilibrée — ROAS marginaux alignés sur tous les canaux.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* ── Channels list ────────────────────────────────────────────── */}
+        <div className="pb-12 mb-12 border-b hair">
+          <div className="flex items-baseline justify-between mb-5">
+            <div>
+              <div className="t-bodyhi text-ink">Canaux · dépense mensuelle</div>
+              <div className="t-caption text-mute mt-1">{CHANNELS.length} canaux · courbe de saturation par canal</div>
+            </div>
+            <div className="t-num text-ink tabular-nums">
+              <AnimNum value={mmm.totalSpend} format={fmtCHF} />
+            </div>
+          </div>
+          <div className="divide-y hair">
+            {mmm.perChannel.map((c, i) => (
+              <ChannelRow key={c.id}
+                          index={i}
+                          channel={c}
+                          spend={c.spend}
+                          util={c.util}
+                          marginal={c.marginal}
+                          animating={animSet.has(c.id)}
+                          onSpend={(v) => setSpend(c.id, v)} />
+            ))}
+          </div>
+        </div>
+
+        {/* ── Radar: mix & saturation ──────────────────────────────────── */}
+        <div className="pb-12 mb-12 border-b hair">
+          <div className="flex items-baseline justify-between mb-5">
+            <div>
+              <div className="t-bodyhi text-ink">Mix & plateau · radar</div>
+              <div className="t-caption text-mute mt-1 normal-case tracking-normal" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 11.5 }}>
+                Polygone violet = part du budget · contour gris = utilisation du ceiling (plateau)
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-12">
+            <SpiderChart channels={mmm.perChannel} />
+            <div className="grid grid-cols-1 gap-y-2 self-center">
+              {mmm.perChannel.slice().sort((a, b) => b.revenue - a.revenue).map(c => (
+                <div key={c.id} className="flex items-center justify-between gap-3 py-1.5 border-b hair">
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-1.5 h-1.5 shrink-0" style={{background:c.hue}} />
+                    <span className="t-body text-ink truncate">{c.name}</span>
+                  </span>
+                  <span className="t-body text-ink num tabular-nums">{fmtCHF(c.revenue)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-3 py-1.5">
+                <span className="flex items-center gap-2.5">
+                  <span className="w-1.5 h-1.5" style={{background:'#bfbacf'}} />
+                  <span className="t-body text-mute">Base / organique</span>
+                </span>
+                <span className="t-body text-mute num tabular-nums">{fmtCHF(mmm.baseUplift)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Marginal ROAS table ──────────────────────────────────────── */}
+        <div className="pb-12 mb-12 border-b hair">
+          <div className="flex items-baseline justify-between mb-5">
+            <div>
+              <div className="t-bodyhi text-ink">ROAS marginal · classement</div>
+              <div className="t-caption text-mute mt-1 normal-case tracking-normal" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 11.5 }}>
+                Retour sur le prochain franc dépensé. Quand un canal sature, son marginal s'effondre — réallouer vers les canaux à fort marginal augmente le top-line.
+              </div>
+            </div>
+          </div>
+          <div className="divide-y hair">
+            {mmm.perChannel
+              .slice()
+              .sort((a, b) => b.marginal - a.marginal)
+              .map((c, i) => {
+                const isTop = i === 0;
+                const isBottom = i === mmm.perChannel.length - 1;
+                const utilTone = c.util > 0.80 ? 'bad' : c.util < 0.30 ? 'ok' : 'neutral';
+                return (
+                  <div key={c.id} className="py-3 grid grid-cols-[20px_10px_1fr_110px_110px_110px] items-center gap-4">
+                    <span className="t-caption text-mute tabular-nums">{String(i + 1).padStart(2, '0')}</span>
+                    <span className="w-1.5 h-1.5 shrink-0" style={{ background: c.hue }} />
+                    <div className="min-w-0">
+                      <div className="t-body text-ink truncate">{c.name}</div>
+                      <div className="t-caption text-mute mt-1">{fmtCHFShort(c.spend)} / mois</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="t-body text-ink num tabular-nums">{c.marginal.toFixed(2).replace('.', ',')}×</div>
+                      <div className="t-caption text-mute mt-1">{isTop ? 'à investir' : isBottom ? 'saturé' : 'marginal'}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className={cn('t-body num tabular-nums',
+                                          utilTone === 'bad' ? 'text-bad' : utilTone === 'ok' ? 'text-ok' : 'text-ink')}>
+                        {fmtPct(c.util, 0)}
+                      </div>
+                      <div className="t-caption text-mute mt-1">ceiling</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="t-body text-ink num tabular-nums">{c.roas.toFixed(2).replace('.', ',')}×</div>
+                      <div className="t-caption text-mute mt-1">moyen</div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
+        {/* ── Source ───────────────────────────────────────────────────── */}
+        <div className="t-caption text-mute normal-case tracking-normal" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
+          Source · WordStream Industry Bench 2024 · Klaviyo Index 2024 · LinkedIn B2B Bench 2024.
+          Courbes calibrées sur budgets SME suisses (CHF 80–250k/mo paid).
+        </div>
+
       </div>
     </PageShell>
   );
 }
 
 Object.assign(window, { MMMScreen });
+
+// ── Spider/radar chart for MMM mix + saturation ─────────────────────────
+function SpiderChart({ channels }) {
+  const N = channels.length;
+  const W = 480, H = 320;
+  const cx = W / 2, cy = H / 2;
+  const R = Math.min(W, H) / 2 - 56;
+  const totalSpend = channels.reduce((a, c) => a + c.spend, 0) || 1;
+
+  const angleAt = (i) => (i / N) * Math.PI * 2 - Math.PI / 2;
+  const pt = (i, r) => [cx + r * Math.cos(angleAt(i)), cy + r * Math.sin(angleAt(i))];
+
+  const ringFrac = [0.25, 0.5, 0.75, 1.0];
+  const sharePoly = channels.map((c, i) => {
+    const share = c.spend / totalSpend;
+    return pt(i, R * share * 2);
+  });
+  const utilPoly = channels.map((c, i) => pt(i, R * c.util));
+
+  return (
+    <MeasuredWidth className="h-[340px]">
+      {(width) => (
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width, height: 340 }} preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <radialGradient id="mmmRadarFill" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#8D0AF5" stopOpacity="0.30" />
+              <stop offset="100%" stopColor="#8D0AF5" stopOpacity="0.08" />
+            </radialGradient>
+          </defs>
+
+          {ringFrac.map((f, ri) => (
+            <polygon key={ri}
+                     points={channels.map((_, i) => pt(i, R * f).join(',')).join(' ')}
+                     fill="none"
+                     stroke="rgba(19,16,34,0.10)"
+                     strokeWidth="0.8"
+                     strokeDasharray={ri === ringFrac.length - 1 ? '' : '2 3'} />
+          ))}
+          {channels.map((_, i) => {
+            const [x, y] = pt(i, R);
+            return <line key={i} x1={cx} y1={cy} x2={x} y2={y}
+                         stroke="rgba(19,16,34,0.08)" strokeWidth="0.6" />;
+          })}
+
+          <polygon points={utilPoly.map(p => p.join(',')).join(' ')}
+                   fill="none" stroke="rgba(19,16,34,0.55)" strokeWidth="1.2"
+                   strokeDasharray="3 2" />
+
+          <polygon points={sharePoly.map(p => p.join(',')).join(' ')}
+                   fill="url(#mmmRadarFill)" stroke="#8D0AF5" strokeWidth="1.4" strokeLinejoin="round" />
+
+          {channels.map((c, i) => {
+            const share = c.spend / totalSpend;
+            const [x, y] = pt(i, R * share * 2);
+            return <circle key={c.id} cx={x} cy={y} r="2.5" fill={c.hue} stroke="#fafafd" strokeWidth="1" />;
+          })}
+
+          {channels.map((c, i) => {
+            const [x, y] = pt(i, R + 22);
+            const anchor = Math.abs(x - cx) < 8 ? 'middle' : x > cx ? 'start' : 'end';
+            return (
+              <g key={c.id}>
+                <text x={x} y={y - 4} textAnchor={anchor}
+                      fontSize="10.5" fill="#131022" fontFamily="Montserrat, sans-serif" fontWeight="500">
+                  {c.name.split(' ')[0]}
+                </text>
+                <text x={x} y={y + 8} textAnchor={anchor}
+                      fontSize="9" fill="#6e6a85" fontFamily="Montserrat, sans-serif" letterSpacing="0.04em">
+                  {fmtPct(c.util, 0)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      )}
+    </MeasuredWidth>
+  );
+}

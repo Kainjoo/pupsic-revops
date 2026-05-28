@@ -186,5 +186,195 @@ function computeScenario(inp) {
 Object.assign(window, {
   channelRevenue, channelMarginalROAS, channelUtilization,
   computeMMM, reallocStep, suggestRealloc, computeScenario,
+  simulateTopLine,
   ORGANIC_UPLIFT,
 });
+
+// ─── Revenue Simulator math ────────────────────────────────────────────────
+// Project 12 months of top-line revenue under a given:
+//   spendByChannel : per-channel monthly CHF budget
+//   marketMix      : { vaud, switzerland, others }   (normalised to 1)
+//   rfmShares      : { champions, loyal, casual, at_risk } (normalised to 1)
+//   panier         : avg revenue per active customer per "unit of monthlyValueMult"
+//   startingCustomers: existing base count
+//   retentionLift  : multiplier on each segment's monthly retention (cap at 0.995)
+//   newCustomerLift: multiplier on channel-driven new customers (RevOps efficacy)
+//   horizonMonths  : default 12
+//
+// Returns:
+//   months[]   : per-month object { idx, label,
+//                  existingRev, newRev, totalRev,
+//                  existingCustomers, newCustomers, totalCustomers,
+//                  perChannel: [{id, hue, revenue}], perMarket: [{id, revenue}],
+//                  perSegment: [{id, count, revenue}] }
+//   totals     : aggregate over horizon
+function simulateTopLine({
+  spendByChannel,
+  marketMix    = { vaud: 0.45, switzerland: 0.45, others: 0.10 },
+  rfmShares,
+  panier,
+  arpuMonthly,  // monthly revenue per active customer (panier amortised)
+  startingCustomers = 320,
+  retentionLift     = 1.0,
+  newCustomerLift   = 1.0,
+  horizonMonths     = 12,
+}) {
+  const mkts = (typeof MARKETS !== 'undefined' && MARKETS) || {};
+  const segs = (typeof RFM_SEGMENTS !== 'undefined' && RFM_SEGMENTS) || [];
+
+  // Default arpuMonthly to panier/12 if unknown (assumes panier = annual ACV).
+  const arpu = arpuMonthly > 0 ? arpuMonthly : (panier > 0 ? panier / 12 : 0);
+
+  // Normalise market mix
+  const mixSum = Object.values(marketMix).reduce((a, b) => a + b, 0) || 1;
+  const mix = Object.fromEntries(Object.entries(marketMix).map(([k, v]) => [k, v / mixSum]));
+
+  // Normalise RFM shares
+  const rfmIn = rfmShares || segs.reduce((acc, s) => { acc[s.id] = s.share; return acc; }, {});
+  const rfmSum = Object.values(rfmIn).reduce((a, b) => a + b, 0) || 1;
+  const rfm = Object.fromEntries(Object.entries(rfmIn).map(([k, v]) => [k, v / rfmSum]));
+
+  // Initialise existing base across RFM segments
+  let segmentCounts = segs.map(s => ({
+    id: s.id, hue: s.hue, mult: s.monthlyValueMult,
+    retention: clamp(s.retentionMonthly * retentionLift, 0.05, 0.995),
+    count: startingCustomers * (rfm[s.id] || 0),
+  }));
+
+  // Pre-compute per-channel monthly new-customer yield against MMM curves.
+  // Map channel revenue at this spend → customer count via average panier (ACV).
+  // Each customer then contributes arpuMonthly in the months they're active
+  // (channel revenue itself is the year-1 ACV-equivalent attribution).
+  const channels = (typeof CHANNELS !== 'undefined' && CHANNELS) || [];
+  const channelYield = channels.map(c => {
+    const spend = Math.max(0, spendByChannel?.[c.id] || 0);
+    const revAtSpend = channelRevenue(c, spend);
+    // Customers reachable from this channel this month (ACV-attributed)
+    const baseCustomers = panier > 0 ? revAtSpend / panier : 0;
+    return { ...c, spend, baseCustomers };
+  });
+
+  const months = [];
+
+  for (let m = 0; m < horizonMonths; m++) {
+    // ── Existing base: monthly contribution via ARPU (not annual panier) ──
+    // BUG FIX: previously s.count * s.mult * panier per month → 12× over-count.
+    // Now: s.count * s.mult * arpuMonthly per month. arpu is the panier amortised
+    // across the customer's typical purchase cycle.
+    let existingCustomers = 0;
+    let existingRev = 0;
+    const perSegment = segmentCounts.map(s => {
+      const monthRev = s.count * s.mult * arpu;
+      existingCustomers += s.count;
+      existingRev += monthRev;
+      return { id: s.id, count: s.count, revenue: monthRev };
+    });
+
+    // ── New customers from channels × markets ──
+    // Newly-acquired customers contribute arpu (monthly) in the month of acquisition;
+    // they roll into the RFM base for subsequent months.
+    let newCustomers = 0;
+    let newRev = 0;
+    const perChannel = [];
+    const perMarket = MARKET_ORDER.map(id => ({ id, revenue: 0, customers: 0 }));
+    const marketByIdx = Object.fromEntries(perMarket.map((m, i) => [m.id, i]));
+
+    for (const ch of channelYield) {
+      let chCustomers = 0;
+      let chRev = 0;
+      for (const mid of MARKET_ORDER) {
+        const mk = mkts[mid];
+        const share = mix[mid] || 0;
+        // Customers landing in this market from this channel (per month)
+        const cust = ch.baseCustomers * share * newCustomerLift / (mk?.cacMultiplier || 1);
+        // Penetration ceiling: cannot exceed the gap to addressable
+        const penFactor = 1 - clamp((mk?.penetration || 0), 0, 0.9);
+        const realCust  = cust * penFactor;
+        // Month-1 contribution = ARPU per customer (annual revenue accumulates via base roll-fwd)
+        // Small organic uplift bonus by market (proximity / earned)
+        const upliftRev = realCust * arpu * (1 + (mk?.organicMonthlyShare || 0));
+        chCustomers += realCust;
+        chRev       += upliftRev;
+        const idx = marketByIdx[mid];
+        if (idx !== undefined) {
+          perMarket[idx].customers += realCust;
+          perMarket[idx].revenue   += upliftRev;
+        }
+      }
+      perChannel.push({ id: ch.id, name: ch.name, hue: ch.hue, customers: chCustomers, revenue: chRev });
+      newCustomers += chCustomers;
+      newRev       += chRev;
+    }
+
+    const totalRev       = existingRev + newRev;
+    const totalCustomers = existingCustomers + newCustomers;
+
+    // ── Roll forward: apply retention BEFORE adding new joiners (track churn) ──
+    let churnedCustomers = 0;
+    segmentCounts = segmentCounts.map(s => {
+      const retained = s.count * s.retention;
+      churnedCustomers += (s.count - retained);
+      return { ...s, count: retained };
+    });
+
+    months.push({
+      idx: m,
+      label: `M${m + 1}`,
+      existingRev, newRev, totalRev,
+      existingCustomers, newCustomers, totalCustomers, churnedCustomers,
+      perChannel, perMarket, perSegment,
+      segmentSnapshot: segmentCounts.map(s => ({ id: s.id, count: s.count })),
+    });
+
+    // ── Enrol new customers (year-1 cohort goes to LOYAL @ mult 1.0, not CASUAL @ 0.55) ──
+    // A freshly-acquired customer who paid `panier` in M1 generates full ARPU per
+    // month for the rest of Y1, not the discounted casual rate. They graduate / decay
+    // into other segments after year 1 in a real CRM — within this 12-mo horizon we
+    // treat them as loyal-tier active customers.
+    const idxCasual    = segmentCounts.findIndex(s => s.id === 'casual');
+    const idxLoyal     = segmentCounts.findIndex(s => s.id === 'loyal');
+    const idxChampions = segmentCounts.findIndex(s => s.id === 'champions');
+    if (idxLoyal >= 0) segmentCounts[idxLoyal].count += newCustomers;
+    // Small champion promo from loyal pool (top performers within year)
+    if (idxLoyal >= 0 && idxChampions >= 0) {
+      const promo = segmentCounts[idxLoyal].count * 0.02;
+      segmentCounts[idxLoyal].count    -= promo;
+      segmentCounts[idxChampions].count += promo;
+    }
+    // Decay from loyal → casual (modest, captures Y1 cohort behavioural drift)
+    if (idxLoyal >= 0 && idxCasual >= 0) {
+      const decay = segmentCounts[idxLoyal].count * 0.015;
+      segmentCounts[idxLoyal].count  -= decay;
+      segmentCounts[idxCasual].count += decay;
+    }
+  }
+
+  // Aggregate totals across horizon
+  const totalRev          = months.reduce((a, m) => a + m.totalRev, 0);
+  const totalExistingRev  = months.reduce((a, m) => a + m.existingRev, 0);
+  const totalNewRev       = months.reduce((a, m) => a + m.newRev, 0);
+  const totalSpend        = horizonMonths * Object.values(spendByChannel || {}).reduce((a, b) => a + (b || 0), 0);
+  const totalNewCustomers = months.reduce((a, m) => a + m.newCustomers, 0);
+  const blendedROAS       = totalSpend > 0 ? totalRev / totalSpend : 0;
+  const blendedCAC        = totalNewCustomers > 0 ? totalSpend / totalNewCustomers : 0;
+
+  // Per-market totals
+  const marketTotals = MARKET_ORDER.map(id => {
+    const r = months.reduce((a, m) => a + (m.perMarket.find(x => x.id === id)?.revenue || 0), 0);
+    const c = months.reduce((a, m) => a + (m.perMarket.find(x => x.id === id)?.customers || 0), 0);
+    return { id, revenue: r, customers: c };
+  });
+  // Per-channel totals (new revenue only)
+  const channelTotals = channels.map(c => {
+    const r = months.reduce((a, m) => a + (m.perChannel.find(x => x.id === c.id)?.revenue || 0), 0);
+    return { id: c.id, name: c.name, hue: c.hue, revenue: r };
+  });
+
+  return {
+    months, totals: {
+      totalRev, totalExistingRev, totalNewRev,
+      totalSpend, totalNewCustomers, blendedROAS, blendedCAC,
+      marketTotals, channelTotals,
+    },
+  };
+}

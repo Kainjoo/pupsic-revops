@@ -116,7 +116,7 @@ function OnboardingScreen({ user, profile, setProfile, go }) {
       onboardingCompleted: true,
     };
     setProfile(finalProfile);
-    go('app/calculator');
+    go('app/plan');
   };
 
   // ── Step 0: Industry ─────────────────────────────────────────────────────

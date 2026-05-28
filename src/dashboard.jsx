@@ -1,212 +1,209 @@
-// Dashboard
-function KPI({ label, value, sub, format = fmtCHF, accentNum }) {
-  return (
-    <Card className="flex flex-col justify-between min-h-[160px]" hover>
-      <div className="text-[11px] text-mute mono uppercase tracking-[0.06em]">{label}</div>
-      <div>
-        <div className={cn('display text-[36px] lg:text-[40px] font-semibold tracking-[-0.025em] leading-none num',
-                            accentNum && 'text-accent')}>
-          <AnimNum value={value} format={format} />
-        </div>
-        <div className="text-[11.5px] text-mute mt-2 tracking-tight truncate">{sub || '\u00a0'}</div>
-      </div>
-    </Card>
-  );
-}
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  Dashboard — RevOps top-down vs bottom-up reconciliation             ║
+// ║                                                                      ║
+// ║  Three sections, no Cards, flat canvas:                              ║
+// ║    1. Header + target slider                                         ║
+// ║    2. Reconciliation: TARGET vs PROJECTION vs GAP                    ║
+// ║    3. Levers to close the gap (or distribute the upside)             ║
+// ║    4. Health signals (units, capacity, funnel, retention)            ║
+// ╚══════════════════════════════════════════════════════════════════════╝
 
-function QuickAction({ title, hint, icon, gated, onClick, need }) {
-  return (
-    <button onClick={onClick} disabled={gated}
-            className={cn('group text-left p-5 border hair flex flex-col gap-3 min-h-[140px] bg-paper transition-colors',
-                          gated ? 'opacity-65 cursor-not-allowed' : 'hover:border-accent/40 hover:bg-[#f7eeff]')}>
-      <div className="flex items-center justify-between">
-        <span className="w-9 h-9 inline-flex items-center justify-center border hair bg-paper">{icon}</span>
-        {gated ? <Badge tone="line" className="mono"><IconLock size={10} /> {need.toUpperCase()}</Badge>
-               : <IconArrowRight size={14} className="text-mute group-hover:text-ink transition-colors" />}
-      </div>
-      <div>
-        <div className="display text-[17px] font-semibold tracking-tight">{title}</div>
-        <div className="text-[12.5px] text-mute mt-1 leading-snug">{hint}</div>
-      </div>
-    </button>
-  );
-}
+function DashboardScreen({ user, plan, profile, scenarios, mmmSpend,
+                            annualTarget, setAnnualTarget, go }) {
+  const model = useRevOpsModel({
+    profile, mmmSpend,
+    target: annualTarget,
+  });
 
-function DashboardScreen({ user, plan, profile, scenarios, mediaPlan, mmmSpend, go }) {
-  const mmm = useMemo(() => computeMMM(mmmSpend), [mmmSpend]);
-  const lastScenario = scenarios[0];
-  const scenarioCalc = useMemo(() => lastScenario ? computeScenario(lastScenario.inputs) : null, [lastScenario]);
-  const score = useMemo(() => computeRevopsScore(profile?.maturity), [profile?.maturity]);
-  const tierMeta = MATURITY_TIERS[score.tier];
-  const weakest = useMemo(() => {
-    const dims = score.dimensions.filter(d => Number.isFinite(d.value));
-    if (dims.length === 0) return [];
-    const min = Math.min(...dims.map(d => d.value));
-    return dims.filter(d => d.value === min).slice(0, 2);
-  }, [score]);
+  // Reconciliation core numbers
+  const target = model.annualTarget;
+  const projected = model.bottomUp.annual;
+  const gap = model.topDown.gap;
+  const gapPct = target > 0 ? gap / target : 0;
+  const onTarget = Math.abs(gapPct) <= 0.05;
+  const gapTone = onTarget ? 'text-ok' : gap > 0 ? 'text-bad' : 'text-accent';
+  const gapLabel = onTarget ? 'À l\'équilibre' : gap > 0 ? 'Manque' : 'Surplus';
 
-  const topLineAnnual = (mmm.totalRevenue * 12) || (scenarioCalc ? scenarioCalc.optimised * 12 : 0);
-  const monthlyLeak = scenarioCalc?.totalLeak || 0;
-  const budgetAlloc = mmm.totalSpend;
-
-  const planObj = PLANS[plan];
+  // Slider bounds
+  const min = Math.max(500_000, Math.round((profile?.caAnnuel || 4_800_000) * 0.5 / 100_000) * 100_000);
+  const max = Math.max(min * 5, Math.round((profile?.caAnnuel || 4_800_000) * 3 / 100_000) * 100_000);
 
   return (
     <PageShell user={user} plan={plan} currentScreen="app/dashboard" go={go} logout={() => go('login')}>
-      <div className="max-w-[1360px] mx-auto px-6 lg:px-10 py-8 lg:py-10">
+      <div className="max-w-[1200px] mx-auto px-8 lg:px-12 py-10 lg:py-14">
 
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-8">
+        {/* ── Header ───────────────────────────────────────────────────── */}
+        <div className="flex items-end justify-between gap-6 flex-wrap pb-10 mb-10 border-b hair">
           <div>
-            <div className="text-[12px] text-mute mono uppercase">{new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-            <h1 className="display text-[40px] lg:text-[48px] font-bold tracking-[-0.025em] leading-[1.02] mt-1">
+            <div className="t-caption text-mute">
+              {new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
+            <h1 className="t-hero text-ink mt-3">
               Bonjour, <span className="text-accent">{user?.name || 'invité'}</span>.
             </h1>
-            <p className="text-[14px] text-mute mt-2 max-w-[560px]">
-              Voici l'état de votre moteur de croissance, snapshot du mois en cours.
+            <p className="t-body text-mute mt-3 max-w-[520px]">
+              Combien votre moteur actuel produit · ce que votre cible exige · l'écart à combler.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <Badge tone="ink" className="mono">PLAN {planObj.name.toUpperCase()} · CHF {planObj.priceCHF}/MOIS</Badge>
-            <button onClick={() => go('pricing')} className="text-[12.5px] text-mute hover:text-ink underline underline-offset-4 decoration-line">
-              Changer de plan →
-            </button>
+        </div>
+
+        {/* ── Target slider ────────────────────────────────────────────── */}
+        <div className="pb-10 mb-10 border-b hair">
+          <div className="flex items-baseline justify-between mb-5">
+            <div className="t-bodyhi text-ink">Cible annuelle</div>
+            <div className="t-num text-accent">{fmtCHFShort(target)}</div>
+          </div>
+          <input type="range" min={min} max={max} step={100_000}
+                 value={target} onChange={(e) => setAnnualTarget(Number(e.target.value))}
+                 className="w-full accent-accent" />
+          <div className="flex items-center justify-between t-caption text-mute mt-2">
+            <span>{fmtCHFShort(min)}</span>
+            <span>basé sur votre CA · {fmtCHFShort(profile?.caAnnuel || 0)}</span>
+            <span>{fmtCHFShort(max)}</span>
           </div>
         </div>
 
-        {/* RevOps Score — hero */}
-        <RevOpsScoreHero score={score} tierMeta={tierMeta} weakest={weakest}
-                          profile={profile} go={go} />
-
-        {/* KPI cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 border-t border-l hair">
-          <div className="border-r border-b hair"><KPI label="Top-line annuel projeté"
-                value={topLineAnnual}
-                sub={`Mix actuel · uplift organique ${fmtPct(ORGANIC_UPLIFT)}`}
-                format={fmtCHFShort} /></div>
-          <div className="border-r border-b hair"><KPI label="ROAS moyen pondéré"
-                value={mmm.roas}
-                sub={`Sur ${fmtCHFShort(mmm.totalSpend)} / mois`}
-                format={(v) => `${v.toFixed(2).replace('.', ',')}×`} /></div>
-          <div className="border-r border-b hair"><KPI label="Fuite mensuelle estimée"
-                value={monthlyLeak}
-                accentNum
-                sub={lastScenario ? `${lastScenario.name}` : 'Aucun scénario'}
-                format={fmtCHF} /></div>
-          <div className="border-r border-b hair"><KPI label="Budget média alloué / mois"
-                value={budgetAlloc}
-                sub={`${CHANNELS.length} canaux actifs`}
-                format={fmtCHF} /></div>
+        {/* ── Reconciliation: 3 columns top-down / bottom-up / gap ──────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 pb-12 mb-12 border-b hair">
+          {/* Top-down */}
+          <div>
+            <div className="t-caption text-mute">Top-down · cible</div>
+            <div className="t-hero text-ink mt-3">
+              <AnimNum value={target} format={fmtCHFShort} />
+            </div>
+            <p className="t-body text-mute mt-3">
+              Annuel exigé. Tweak le curseur pour scénariser un autre objectif.
+            </p>
+          </div>
+          {/* Bottom-up */}
+          <div className="lg:border-l hair lg:pl-12">
+            <div className="t-caption text-mute">Bottom-up · projeté</div>
+            <div className="t-hero text-ink mt-3">
+              <AnimNum value={projected} format={fmtCHFShort} />
+            </div>
+            <p className="t-body text-mute mt-3">
+              Au mix média actuel ({fmtCHF(model.mmm.totalSpend)} / mois) sur 12 mois.
+            </p>
+            <div className="mt-4 space-y-2">
+              <ReconRow label="Parc existant"  value={model.bottomUp.existing}   pct={model.bottomUp.existing / projected} />
+              <ReconRow label="Nouveaux clients" value={model.bottomUp.newAcq}   pct={model.bottomUp.newAcq   / projected} />
+            </div>
+          </div>
+          {/* Gap */}
+          <div className="lg:border-l hair lg:pl-12">
+            <div className="t-caption text-mute">{gapLabel}</div>
+            <div className={cn('t-hero mt-3', gapTone)}>
+              {gap >= 0 ? '−' : '+'}<AnimNum value={Math.abs(gap)} format={fmtCHFShort} />
+            </div>
+            <p className="t-body text-mute mt-3">
+              {fmtPct(Math.abs(gapPct), 0)} de la cible.
+              {onTarget && ' Trajectoire alignée.'}
+              {!onTarget && gap > 0 && ' Activez les leviers ci-dessous.'}
+              {!onTarget && gap < 0 && ' Sandbag ? Réinvestissez ou ajustez la cible.'}
+            </p>
+          </div>
         </div>
 
-        {/* Quick actions */}
-        <div className="mt-10 mb-4 flex items-center justify-between">
-          <h2 className="display text-[20px] font-semibold tracking-tight">Actions rapides</h2>
-          <div className="text-[11px] text-mute mono uppercase tracking-[0.04em]">{PLANS[plan].name} · ce mois-ci</div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <QuickAction
-            title="Nouveau scénario"
-            hint="Diagnostic des fuites pipeline en 7 inputs."
-            icon={<IconCalculator size={16} />}
+        {/* ── Levers ───────────────────────────────────────────────────── */}
+        {model.levers.length > 0 && (
+          <div className="pb-12 mb-12 border-b hair">
+            <div className="flex items-baseline justify-between mb-5">
+              <div>
+                <div className="t-bodyhi text-ink">Leviers pour combler l'écart</div>
+                <div className="t-caption text-mute mt-1">
+                  Chaque levier estimé indépendamment, impact cumulatif non additif.
+                </div>
+              </div>
+            </div>
+            <div className="divide-y hair">
+              {model.levers.map((lev, i) => (
+                <div key={lev.id} className="py-4 grid grid-cols-[24px_1fr_140px_140px] items-baseline gap-6">
+                  <span className="t-caption text-mute tabular-nums">{String(i + 1).padStart(2, '0')}</span>
+                  <div className="min-w-0">
+                    <div className="t-body text-ink">{lev.label}</div>
+                    <p className="t-caption text-mute mt-1 normal-case tracking-normal leading-relaxed"
+                       style={{ textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
+                      {lev.rationale}
+                    </p>
+                    {lev.id === 'budget' && (
+                      <GrowthFinancingNote monthlyDelta={lev.delta}
+                                            annualNeed={lev.delta * 12}
+                                            go={go} />
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="t-num text-ink">{fmtNum(Math.round(lev.delta))}</div>
+                    <div className="t-caption text-mute mt-1">{lev.unit}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="t-num text-accent">+{fmtCHFShort(lev.impact)}</div>
+                    <div className="t-caption text-mute mt-1">impact / an</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Health: funnel / capacity / units / retention ─────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-12 pb-12 mb-12 border-b hair">
+          <HealthBlock
+            label="Funnel"
+            value={fmtNum(Math.round(model.funnel.leads.monthly))}
+            unit="leads / mois"
+            sub={`Cycle ${model.funnel.salesCycleDays}j · Win ${fmtPct(model.funnel.won.conv, 0)}`}
             onClick={() => go('app/calculator')}
           />
-          <QuickAction
-            title="Lancer un MMM"
-            hint="Répartition budget × 8 canaux, courbes de saturation."
-            icon={<IconChart size={16} />}
-            need={planAllows(plan, 'growth') ? null : 'growth'}
-            gated={!planAllows(plan, 'growth')}
-            onClick={() => planAllows(plan, 'growth') ? go('app/mmm') : go('pricing')}
+          <HealthBlock
+            label="Capacité commerciale"
+            value={model.capacity.aeCount > 0
+              ? fmtCHFShort(model.capacity.rampedCapacity)
+              : '—'}
+            unit={model.capacity.aeCount > 0
+              ? `${model.capacity.aeCount} AE × quota ${fmtCHFShort(model.capacity.aeQuota)}`
+              : 'Sans AE'}
+            sub={model.capacity.aeCount > 0
+              ? `Coverage ${fmtPct(model.capacity.pipelineCoverage, 0)} de la cible`
+              : 'Self-serve / inbound only'}
           />
-          <QuickAction
-            title="Construire un media plan"
-            hint="Grille mensuelle 12 mois × canaux, export CSV."
-            icon={<IconCoins size={16} />}
-            need={planAllows(plan, 'growth') ? null : 'growth'}
-            gated={!planAllows(plan, 'growth')}
-            onClick={() => planAllows(plan, 'growth') ? go('app/media-plan') : go('pricing')}
+          <HealthBlock
+            label="Unit economics"
+            value={`${model.units.ltvCacRatio > 0 ? model.units.ltvCacRatio.toFixed(1).replace('.', ',') + '×' : '—'}`}
+            unit="LTV / CAC"
+            sub={`CAC ${fmtCHF(model.units.cac)} · LTV ${fmtCHFShort(model.units.ltv)} · payback ${model.units.cacPaybackMo > 0 ? model.units.cacPaybackMo.toFixed(0) + ' mois' : '—'}`}
+            tone={model.units.ltvCacRatio >= 3 ? 'ok' : 'warn'}
+          />
+          <HealthBlock
+            label="Rétention"
+            value={`${(Math.pow(0.93, 12) * 100).toFixed(0)}%`}
+            unit="rétention 12 mois"
+            sub={`${fmtNum(Math.round(model.bottomUp.churned))} clients churnés / an sans intervention`}
+            onClick={() => go('app/rfm')}
           />
         </div>
 
-        {/* Two-pane: scenarios + mix */}
-        <div className="mt-10 grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-3">
-          {/* Scenarios list */}
-          <Card padded={false}>
-            <div className="px-5 py-4 flex items-center justify-between border-b hair">
-              <div className="display text-[15px] font-semibold tracking-tight">Scénarios enregistrés</div>
-              <div className="text-[11px] text-mute mono uppercase">
-                {scenarios.length} / {PLANS[plan].caps.scenarios === Infinity ? '∞' : PLANS[plan].caps.scenarios}
-              </div>
+        {/* ── Flags ───────────────────────────────────────────────────── */}
+        {model.flags.length > 0 && (
+          <div className="pb-12 mb-12 border-b hair">
+            <div className="t-bodyhi text-ink mb-5">Signaux d'alerte</div>
+            <div className="space-y-2">
+              {model.flags.map(f => (
+                <div key={f.id} className="flex items-start gap-3 py-1.5">
+                  <span className={cn('w-1.5 h-1.5 rounded-full mt-1.5 shrink-0',
+                                       f.tone === 'bad' ? 'bg-bad' : f.tone === 'warn' ? 'bg-warn' : 'bg-mute')} />
+                  <div className="t-body text-ink">{f.label}</div>
+                </div>
+              ))}
             </div>
-            {scenarios.length === 0 && (
-              <div className="px-5 py-10 text-center text-[13px] text-mute">
-                Aucun scénario. Lancez le RevOps Calculator pour en créer un.
-              </div>
-            )}
-            {scenarios.map((s, i) => {
-              const r = computeScenario(s.inputs);
-              return (
-                <button key={s.id}
-                        onClick={() => go('app/calculator', { scenarioId: s.id })}
-                        className={cn('w-full text-left px-5 py-4 flex items-center justify-between gap-4 hover:bg-paper2/60 transition-colors',
-                                      i !== scenarios.length - 1 && 'border-b hair')}>
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 border hair inline-flex items-center justify-center text-[11px] mono uppercase text-mute">
-                      {String(i + 1).padStart(2, '0')}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[14px] font-semibold tracking-tight truncate">{s.name}</div>
-                      <div className="text-[11.5px] text-mute mono">{new Date(s.updatedAt).toLocaleDateString('fr-CH')} · {s.inputs.leadsMois} leads/mois</div>
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="display text-[18px] font-semibold tracking-tight num text-bad">{fmtCHF(r.totalLeak)}</div>
-                    <div className="text-[11px] text-mute mono uppercase">FUITE /MOIS</div>
-                  </div>
-                </button>
-              );
-            })}
-          </Card>
+          </div>
+        )}
 
-          {/* Mix snapshot */}
-          <Card padded={false}>
-            <div className="px-5 py-4 flex items-center justify-between border-b hair">
-              <div className="display text-[15px] font-semibold tracking-tight">Allocation média actuelle</div>
-              {!planAllows(plan, 'growth') ? (
-                <Badge tone="line" className="mono"><IconLock size={10}/> GROWTH</Badge>
-              ) : (
-                <button onClick={() => go('app/mmm')} className="text-[12px] text-mute hover:text-ink underline underline-offset-4 decoration-line">
-                  Ouvrir le MMM →
-                </button>
-              )}
-            </div>
-            <div className="p-5 space-y-2.5">
-              {mmm.perChannel
-                .slice()
-                .sort((a, b) => b.spend - a.spend)
-                .map(c => {
-                  const pct = mmm.totalSpend > 0 ? c.spend / mmm.totalSpend : 0;
-                  return (
-                    <div key={c.id} className="grid grid-cols-[1fr_60px_46px] items-center gap-3">
-                      <div className="text-[12.5px] tracking-tight truncate flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full" style={{background: c.hue}} />
-                        {c.name}
-                      </div>
-                      <div className="h-1.5 bg-line2 relative overflow-hidden">
-                        <div className="h-full bg-ink" style={{ width: `${pct * 100}%` }} />
-                      </div>
-                      <div className="text-[12px] text-mute mono num text-right">{fmtPct(pct, 0)}</div>
-                    </div>
-                  );
-                })}
-              <Divider className="my-3" />
-              <div className="flex items-center justify-between text-[12.5px]">
-                <span className="text-mute">Total / mois</span>
-                <span className="num font-semibold">{fmtCHF(mmm.totalSpend)}</span>
-              </div>
-            </div>
-          </Card>
+        {/* ── Quick links to deep-dive modules ─────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-12 gap-y-4">
+          <DeepLink label="MMM" sub="Optimiser le mix paid" onClick={() => go('app/mmm')} />
+          <DeepLink label="Media Plan" sub="Distribuer sur 12 mois" onClick={() => go('app/media-plan')} />
+          <DeepLink label="RFM" sub="Décomposer la base" onClick={() => go('app/rfm')} />
+          <DeepLink label="Leak Calc" sub="Diagnostiquer le funnel" onClick={() => go('app/calculator')} />
         </div>
 
       </div>
@@ -214,120 +211,47 @@ function DashboardScreen({ user, plan, profile, scenarios, mediaPlan, mmmSpend, 
   );
 }
 
-Object.assign(window, { DashboardScreen });
-
-// ─── RevOps Score hero ──────────────────────────────────────────────────
-// Big circular score gauge + tier + weakest axes + CTA.
-// Renders a friendly empty-state if maturity wasn't filled.
-function RevOpsScoreHero({ score, tierMeta, weakest, profile, go }) {
-  const answered = score.dimensions.some(d => Number.isFinite(d.value));
-
+// ── Small primitives — flat, no Cards ─────────────────────────────────
+function ReconRow({ label, value, pct }) {
   return (
-    <Card padded={false} className="mb-3">
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_auto]">
-        {/* Gauge */}
-        <div className="p-6 lg:p-7 border-b lg:border-b-0 lg:border-r hair flex items-center gap-5">
-          <ScoreRing value={answered ? score.score : 0} tone={answered ? tierMeta.tone : 'mute'} />
-          <div className="min-w-0">
-            <div className="mono text-[10.5px] uppercase tracking-[0.08em] text-mute">RevOps Score</div>
-            <div className="display text-[40px] font-bold tracking-[-0.025em] leading-none mt-1 num">
-              {answered ? <AnimNum value={score.score} format={fmtNum} /> : <span className="text-mute">—</span>}
-              <span className="text-mute text-[15px] font-normal num"> /100</span>
-            </div>
-            {answered ? (
-              <div className="mt-2">
-                <Badge tone={tierMeta.tone} className="mono">{tierMeta.label.toUpperCase()} · {tierMeta.band}</Badge>
-              </div>
-            ) : (
-              <div className="text-[11.5px] text-mute mt-2">Non évalué</div>
-            )}
-          </div>
-        </div>
-
-        {/* Axes + narrative */}
-        <div className="p-6 lg:p-7 border-b lg:border-b-0 lg:border-r hair">
-          {answered ? (
-            <>
-              <div className="text-[13.5px] text-ink tracking-tight leading-snug max-w-[560px]">
-                {tierMeta.hint}
-              </div>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
-                {score.dimensions.map(d => (
-                  <div key={d.id} className="flex flex-col gap-1.5">
-                    <div className="text-[11.5px] text-ink tracking-tight leading-tight">{d.label}</div>
-                    <div className="flex items-center gap-1.5">
-                      {[0,1,2,3].map(i => (
-                        <span key={i} className={cn('w-2 h-3',
-                          Number.isFinite(d.value) && i < d.value ? 'bg-accent' : 'bg-line2')} />
-                      ))}
-                      <span className="mono text-[10px] text-mute uppercase tracking-[0.06em] num ml-1">
-                        {Number.isFinite(d.value) ? `${d.value}/4` : '—'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {weakest.length > 0 && (
-                <div className="mt-4 text-[11.5px] text-mute leading-snug">
-                  <span className="mono uppercase tracking-[0.06em] text-accent">Axe(s) prioritaire(s) ·</span>{' '}
-                  {weakest.map(d => d.label).join(' · ')}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="h-full flex flex-col justify-center">
-              <div className="display text-[18px] font-semibold tracking-tight">
-                Évaluez votre maturité RevOps en 1 minute.
-              </div>
-              <div className="text-[12.5px] text-mute mt-1.5 leading-snug max-w-[440px]">
-                Six axes — données, opérations leads, attribution, alignement, stack, pilotage —
-                pour calibrer vos recommandations et débloquer le potentiel de récupération.
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* CTA */}
-        <div className="p-6 lg:p-7 flex flex-col gap-2 justify-center min-w-[200px]">
-          <Button variant={answered ? 'ghost' : 'accent'} size="md"
-                  onClick={() => go('app/onboarding')}>
-            {answered ? 'Refaire l\'évaluation' : 'Commencer l\'évaluation'}
-          </Button>
-          {answered && (
-            <Button variant="quiet" size="sm"
-                    onClick={() => go('app/calculator')}>
-              Voir l'impact sur le calculator →
-            </Button>
-          )}
-        </div>
+    <div className="grid grid-cols-[1fr_80px_90px] items-center gap-3">
+      <div className="t-body text-mute truncate">{label}</div>
+      <div className="h-[2px] bg-line2 relative overflow-hidden">
+        <div className="h-full bg-accent" style={{ width: `${(pct || 0) * 100}%` }} />
       </div>
-    </Card>
-  );
-}
-
-// Circular SVG ring — color-tinted by tone token (uses CSS vars from Tailwind config).
-function ScoreRing({ value, tone = 'accent', size = 88 }) {
-  const r = 38;
-  const c = 2 * Math.PI * r;
-  const v = clamp(value, 0, 100);
-  const dash = (v / 100) * c;
-  const toneClass = tone === 'ok' ? 'text-ok'
-                  : tone === 'warn' ? 'text-warn'
-                  : tone === 'bad' ? 'text-bad'
-                  : tone === 'mute' ? 'text-mute'
-                  : 'text-accent';
-  return (
-    <div className={cn('relative shrink-0', toneClass)} style={{ width: size, height: size }}>
-      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="9" />
-        <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" strokeWidth="9"
-                strokeDasharray={`${dash} ${c - dash}`}
-                strokeLinecap="butt"
-                style={{ transition: 'stroke-dasharray 480ms cubic-bezier(.2,.7,.2,1)' }} />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="display text-[20px] font-bold tracking-tight num">{Math.round(v)}</div>
-      </div>
+      <div className="t-body text-ink num text-right">{fmtCHFShort(value)}</div>
     </div>
   );
 }
+
+function HealthBlock({ label, value, unit, sub, onClick, tone }) {
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag onClick={onClick}
+         className={cn('text-left transition-colors w-full',
+                        onClick && 'hover:text-accent')}>
+      <div className="t-caption text-mute">{label}</div>
+      <div className={cn('t-hero mt-3',
+                          tone === 'ok' ? 'text-ink' : tone === 'warn' ? 'text-warn' : 'text-ink')}
+           style={{ fontSize: 24 }}>
+        {value}
+      </div>
+      <div className="t-caption text-mute mt-2">{unit}</div>
+      {sub && <div className="t-body text-mute mt-2">{sub}</div>}
+    </Tag>
+  );
+}
+
+function DeepLink({ label, sub, onClick }) {
+  return (
+    <button onClick={onClick} className="text-left group">
+      <div className="t-body text-ink group-hover:text-accent transition-colors flex items-center gap-1.5">
+        {label}
+        <IconArrowRight size={11} className="text-mute group-hover:text-accent translate-x-0 group-hover:translate-x-0.5 transition-transform" />
+      </div>
+      <div className="t-caption text-mute mt-1">{sub}</div>
+    </button>
+  );
+}
+
+Object.assign(window, { DashboardScreen });

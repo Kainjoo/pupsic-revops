@@ -27,13 +27,23 @@ REQUIRED=(
   "src/lib.jsx"
   "src/icons.jsx"
   "src/mmm-math.jsx"
+  "src/revops-model.jsx"
   "src/shell.jsx"
+  "src/expert-shell.jsx"
   "src/auth.jsx"
   "src/pricing.jsx"
   "src/dashboard.jsx"
   "src/calculator.jsx"
   "src/mmm.jsx"
   "src/media-plan.jsx"
+  "src/simulator.jsx"
+  "src/rfm.jsx"
+  "src/trials.jsx"
+  "src/integrations.jsx"
+  "src/cockpit.jsx"
+  "src/waitlist.jsx"
+  "src/plan-charts.jsx"
+  "src/brand-planner.jsx"
   "src/account.jsx"
   "src/onboarding.jsx"
   "src/app.jsx"
@@ -80,7 +90,7 @@ else
 fi
 
 # Script tags for every src module
-MODULES=(lib icons mmm-math shell auth pricing dashboard calculator mmm media-plan account onboarding app)
+MODULES=(lib icons mmm-math revops-model shell expert-shell auth pricing dashboard calculator mmm media-plan simulator rfm trials integrations cockpit waitlist plan-charts brand-planner account onboarding app)
 for m in "${MODULES[@]}"; do
   if grep -q "src=\"src/${m}.jsx\"" "$INDEX"; then
     ok "Script tag: src/${m}.jsx"
